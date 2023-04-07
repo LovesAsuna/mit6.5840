@@ -273,14 +273,14 @@ func (rf *Raft) getLastLog() Entry {
 }
 
 func (rf *Raft) matchLog(prevLogTerm, prevLogIndex int) bool {
-	for _, entry := range rf.logs {
-		if entry.Index < prevLogIndex {
-			continue
-		} else {
-			return entry.Term == prevLogTerm
-		}
+	if prevLogIndex == rf.getFirstLog().Index {
+		return true
 	}
-	return false
+	lastIndex := rf.getLastLog().Index
+	if lastIndex < prevLogIndex {
+		return false
+	}
+	return lastIndex == prevLogIndex && rf.getLastLog().Term == prevLogTerm
 }
 
 // example code to send a RequestVote RPC to a server.
@@ -373,7 +373,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			for index >= firstIndex && rf.logs[index-firstIndex].Term == reply.ConflictTerm {
 				index--
 			}
-			reply.ConflictIndex = index
+			reply.ConflictIndex = index + 1
 		}
 		return
 	}
@@ -636,6 +636,7 @@ func (rf *Raft) handleAppendEntriesReply(peer int, args *AppendEntriesArgs, repl
 		rf.matchIndex[peer] = args.PrevLogIndex + len(args.Entries)
 		rf.updateCommitIndex()
 	} else {
+		DPrintf("{Node %v} conflict, conflictTerm: %v, ConflictIndex: %v", peer, reply.ConflictTerm, reply.ConflictIndex)
 		rf.nextIndex[peer] = reply.ConflictIndex
 	}
 }
@@ -689,20 +690,20 @@ func (rf *Raft) genRequestVoteArgs() *RequestVoteArgs {
 }
 
 func (rf *Raft) genAppendEntriesArgs(prevLogIndex int) *AppendEntriesArgs {
+	firstIndex := rf.getFirstLog().Index
 	args := &AppendEntriesArgs{
 		Term:         rf.currentTerm,
 		LeaderId:     rf.me,
 		PrevLogIndex: 0,
 		PrevLogTerm:  0,
-		Entries:      []Entry{},
+		Entries:      shrinkEntriesArray(rf.logs[prevLogIndex+1-firstIndex:]),
 		LeaderCommit: rf.commitIndex,
 	}
-	firstIndex := rf.getFirstLog().Index
-	for _, entry := range rf.logs {
+	for i := rf.getLastLog().Index; i > firstIndex; i-- {
+		entry := &rf.logs[i]
 		if entry.Index == prevLogIndex {
 			args.PrevLogTerm = entry.Term
 			args.PrevLogIndex = entry.Index
-			args.Entries = shrinkEntriesArray(rf.logs[prevLogIndex+1-firstIndex:])
 			break
 		}
 	}
