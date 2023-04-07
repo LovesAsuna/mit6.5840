@@ -22,8 +22,20 @@ type ExampleReply struct {
 	Y int
 }
 
-// Add your RPC definitions here.
+type FetchTaskRequest struct {
+}
 
+type FetchTaskResponse struct {
+	Task Task
+}
+
+type TaskDoneRequest struct {
+	Id int
+}
+
+type TaskDoneResponse struct{}
+
+// Add your RPC definitions here.
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the coordinator.
